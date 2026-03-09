@@ -1,0 +1,165 @@
+# 位置情報探索アプリ
+
+地図上でスポットを検索・表示できるフルスタック Web アプリケーションです。
+地図を動かすだけで周辺スポットの一覧と現在地の住所がリアルタイムに更新されます。
+
+---
+
+## 環境構築
+
+### 必要なもの
+
+- Docker / Docker Compose
+
+### 手順
+
+1. リポジトリをクローンする
+
+```bash
+git clone https://github.com/s3s7/location_information.git
+cd location_information
+```
+
+2. 環境変数ファイルを作成する
+
+```bash
+cp .env.example .env
+```
+
+3. `.env` を編集する
+
+```env
+POSTGRES_DB=location_information
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+
+# Google Maps Geocoding API キー（住所表示に使用）
+# 未設定の場合は「緯度 X, 経度 Y」形式にフォールバック
+GEOCODING_PROVIDER=google
+GEOCODING_API_KEY=YOUR_GOOGLE_GEOCODING_API_KEY
+
+NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
+NEXT_PUBLIC_MAP_STYLE_URL=https://demotiles.maplibre.org/style.json
+```
+
+---
+
+## 実行手順
+
+```bash
+docker-compose up
+```
+
+このコマンド 1 つで以下がすべて自動実行されます。
+
+| ステップ | 内容 |
+|---------|------|
+| DB 起動 | PostgreSQL + PostGIS コンテナを起動 |
+| マイグレーション | テーブル・インデックスを作成 |
+| シードデータ投入 | CSV 約 500 件を `spots` テーブルにインポート |
+| API 起動 | NestJS サーバーを `http://localhost:3001` で起動 |
+| Web 起動 | Next.js を `http://localhost:3000` で起動 |
+
+ブラウザで `http://localhost:3000` を開くとアプリが使えます。
+
+---
+
+## 使用した主要ライブラリとその選定理由
+
+### Frontend
+
+| ライブラリ | バージョン | 選定理由 |
+|-----------|-----------|---------|
+| Next.js | 15 | 指定技術スタック。App Router によるシンプルな構成 |
+| MapLibre GL JS | ^5.19.0 | オープンソースで無料。MapboxGL 互換の API で高機能な地図を実現できる。Google Maps より API キー不要で導入コストが低い |
+| Tailwind CSS | ^4 | 指定技術スタック。ユーティリティクラスで素早く UI を構築できる |
+| TypeScript | ^5 | 指定技術スタック |
+
+### Backend
+
+| ライブラリ / サービス | バージョン | 選定理由 |
+|-----------|-----------|---------|
+| NestJS | ^11 | 指定技術スタック。モジュール構成で関心を分離しやすい |
+| TypeORM | ^0.3 | 指定技術スタック 公式ドキュメントはわかりやすく、ボリュームもそこまでないので学習コストは低め.リレーショナルDBサポート。Entityから差分を自動検知するDB migrationの仕組み。SQLのQueryBuilderやTransactionの仕組みも提供。|
+| csv-parse | ^5 | シードデータの CSV パースに使用。sync API でシンプルに実装できる |
+| Google Maps Geocoding API | - | 逆ジオコーディング（座標 → 住所変換）に使用。日本語住所の精度が高く、`language=ja` パラメータで日本語表記の住所を取得できる。APIキー未設定時は「緯度 X, 経度 Y」のフォールバック表示に切り替わるため、キーなしでも動作確認が可能 |
+
+### Infrastructure
+
+| 技術 | 選定理由 |
+|------|---------|
+| PostgreSQL 16 + PostGIS 3.4 | `ST_DWithin` による半径検索と GiST インデックスで地理空間クエリを高速化できる |
+| Docker Compose | 指定技術スタック |
+
+---
+
+## 実装時に特に工夫した点、および技術的な判断を行った箇所
+
+### 1. 地図操作イベントの役割分離（move / moveend）
+
+住所表示とスポット検索で意図的にトリガーを分けています。
+
+```
+map.on("move")    → currentCenter 更新 → 住所表示に追従（リアルタイム）
+map.on("moveend") → searchCenter 更新  → スポット検索を実行（移動完了後のみ）
+```
+
+ドラッグ中にスポット検索 API を連打しないよう、移動が完全に止まった瞬間のみ検索を走らせています。
+
+### 2. 逆ジオコーディングのデバウンス + バックエンドキャッシュ
+
+住所取得は以下の 2 段階で API コストと頻度を抑制しています。
+
+**フロントエンド側：400ms デバウンス**
+`map.on("move")` は 60fps で発火しますが、`setTimeout` で直前のタイマーをキャンセルし、地図が止まってから 400ms 後に 1 回だけ API を呼びます。
+
+**バックエンド側：DB キャッシュ（`reverse_geocode_cache` テーブル）**
+座標を小数 4 桁（約 11m 精度）に丸めてキャッシュキーとし、同じ地点は Google Maps API を呼ばずにキャッシュから即返します。キャッシュミス時のみ外部 API を呼び出し、結果を UPSERT で保存します。
+
+### 3. PostGIS による地理空間検索
+
+半径検索には `ST_DWithin` + GiST インデックスを採用しました。アプリケーション層で距離計算するのではなく、DB に計算を委譲することで大量データでも高速に動作します。`ST_Distance` で各スポットまでの距離もあわせて取得し、フロントの一覧表示に活用しています。
+
+```sql
+SELECT *, ST_Distance(location, center::geography) AS "distanceMeters"
+FROM spots
+WHERE ST_DWithin(location, center::geography, radiusKm * 1000)
+ORDER BY "distanceMeters" ASC
+LIMIT 200
+```
+
+### 4. `raw JSONB` カラムによる元データ保全
+
+CSV の全フィールド（`category` 等、専用カラムを持たないものも含む）を `raw JSONB` に丸ごと保存しています。現時点では API から返していませんが、後からカラム追加なしに `raw->>'category'` でクエリできる拡張性を持たせています。
+
+### 5. APIキー未設定時のフォールバック
+
+`GEOCODING_API_KEY` が未設定の場合、住所の代わりに「緯度 X, 経度 Y」を返すフォールバックを実装しています。API キーなしでも全機能が動作確認できる状態を維持しています。
+
+### 6. docker-compose up 1 コマンドで完結する起動フロー
+
+`api` サービスの `command` にマイグレーション・シード・開発サーバー起動を直列で記述し、`depends_on: condition: service_healthy` で DB の準備完了を待ってから実行します。
+初期状態から操作できる状態を 1 コマンドで実現しています。
+
+---
+
+## 時間が足りず実装を簡略化した箇所や、今後の改善点
+
+### 実装を簡略化した箇所
+
+- **地図マーカークリック時のポップアップ**
+  マーカークリック時のポップアップ（スポット名・住所表示）は未実装です。
+
+- **スポット一覧とマーカーの双方向連動未実装**
+  一覧のスポットをクリックして地図のマーカーをハイライトする、あるいはマーカークリックで一覧をスクロールする連動は未実装です。
+
+- **検索半径がドロップダウン固定**
+  `[1, 3, 5, 10, 20] km` の 5 択のみです。スライダーによる任意値指定のほうが UX として望ましい場面もあります。
+
+### 今後の改善点
+
+- **スポットのカテゴリフィルタ**
+  `raw JSONB` に `category` が保存されているため、カテゴリ絞り込みを UI に追加できます。
+
+- **ページネーション**
+  現在は `LIMIT 200` で件数を打ち切っています。スクロール読み込みやページネーションで全件を閲覧できるようにすることが望ましいです。
