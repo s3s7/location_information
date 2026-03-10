@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RadiusControl from "@/components/RadiusControl";
 import SpotList from "@/components/SpotList";
 import type { Center, Spot } from "@/lib/types";
@@ -36,21 +36,26 @@ export default function HomePage() {
 
   const resultCount = useMemo(() => spots.length, [spots]);
 
+  const lastAddressFetchRef = useRef<number>(0);
+  const currentCenterRef = useRef<Center>(currentCenter);
+  currentCenterRef.current = currentCenter;
+  const lastSearchCenterRef = useRef<Center | null>(null);
+
   useEffect(() => {
-    const timer = window.setTimeout(async () => {
+    const THROTTLE_MS = 500;
+    const elapsed = Date.now() - lastAddressFetchRef.current;
+    const remaining = THROTTLE_MS - elapsed;
+
+    const doFetch = async () => {
+      const center = currentCenterRef.current;
       setLoadingAddress(true);
       setAddressError("");
-
       try {
         const response = await fetch(
-          `${apiBaseUrl}/geocode/reverse?lat=${currentCenter.lat}&lng=${currentCenter.lng}`,
+          `${apiBaseUrl}/geocode/reverse?lat=${center.lat}&lng=${center.lng}`,
           { cache: "no-store" },
         );
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const data = await response.json();
         setAddress(data.address ?? "");
       } catch {
@@ -59,12 +64,38 @@ export default function HomePage() {
       } finally {
         setLoadingAddress(false);
       }
-    }, 400);
+    };
+
+    if (remaining <= 0) {
+      lastAddressFetchRef.current = Date.now();
+      void doFetch();
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      lastAddressFetchRef.current = Date.now();
+      void doFetch();
+    }, remaining);
 
     return () => window.clearTimeout(timer);
   }, [apiBaseUrl, currentCenter.lat, currentCenter.lng]);
 
   useEffect(() => {
+    const SKIP_THRESHOLD_KM = 0.2;
+    const prev = lastSearchCenterRef.current;
+    if (prev) {
+      const dLat = ((searchCenter.lat - prev.lat) * Math.PI) / 180;
+      const dLng = ((searchCenter.lng - prev.lng) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos((prev.lat * Math.PI) / 180) *
+          Math.cos((searchCenter.lat * Math.PI) / 180) *
+          Math.sin(dLng / 2) ** 2;
+      const distKm = 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      if (distKm < SKIP_THRESHOLD_KM) return;
+    }
+    lastSearchCenterRef.current = searchCenter;
+
     const fetchSpots = async () => {
       setLoadingSpots(true);
       setSpotsError("");
@@ -90,7 +121,7 @@ export default function HomePage() {
     };
 
     fetchSpots();
-  }, [apiBaseUrl, searchCenter.lat, searchCenter.lng, radiusKm]);
+  }, [apiBaseUrl, searchCenter, radiusKm]);
 
   return (
     <main className="min-h-screen p-4">
