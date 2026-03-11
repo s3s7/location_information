@@ -41,7 +41,7 @@ export class GeocodeService {
         latRounded,
         lngRounded,
         address,
-        process.env.GEOCODING_PROVIDER || "google",
+        "google",
       ],
     );
 
@@ -52,7 +52,7 @@ export class GeocodeService {
   }
 
   private async fetchAddress(lat: number, lng: number): Promise<string> {
-    const apiKey = process.env.GEOCODING_API_KEY;
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
       return `緯度 ${lat}, 経度 ${lng}`;

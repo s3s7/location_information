@@ -33,13 +33,12 @@ POSTGRES_DB=location_information
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=postgres
 
-# Google Maps Geocoding API キー（住所表示に使用）
-# 未設定の場合は「緯度 X, 経度 Y」形式にフォールバック
-GEOCODING_PROVIDER=google
-GEOCODING_API_KEY=YOUR_GOOGLE_GEOCODING_API_KEY
-
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3001
-NEXT_PUBLIC_MAP_STYLE_URL=https://demotiles.maplibre.org/style.json
+
+# Google Maps API キー（地図表示・住所取得の両方に使用）
+# Google Cloud Console で Maps JavaScript API と Geocoding API を有効化してください
+# 未設定の場合、住所は「緯度 X, 経度 Y」形式にフォールバック
+NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
 ```
 
 ---
@@ -71,7 +70,7 @@ docker-compose up
 | ライブラリ | バージョン | 選定理由 |
 |-----------|-----------|---------|
 | Next.js | 15 | 指定技術スタック。App Router によるシンプルな構成 |
-| MapLibre GL JS | ^5.19.0 | オープンソースで無料。MapboxGL 互換の API で高機能な地図を実現できる。Google Maps より API キー不要で導入コストが低い |
+| Google Maps JavaScript API | weekly | 地図表示・マーカー・半径サークル描画に使用。日本の地図データの精度が高く、住所表示との一貫性を保てる。 |
 | Tailwind CSS | ^4 | 指定技術スタック。ユーティリティクラスで素早く UI を構築できる |
 | TypeScript | ^5 | 指定技術スタック |
 
@@ -95,17 +94,17 @@ docker-compose up
 
 ## 実装時に特に工夫した点、および技術的な判断を行った箇所
 
-### 1. 地図操作イベントの役割分離（move / moveend）
+### 1. 地図操作イベントの役割分離（center_changed / idle）
 
 住所表示とスポット検索で意図的にトリガーを分けています。
 
 ```
-map.on("move")    → currentCenter 更新 → 住所取得をスロットル実行（500ms に 1 回）
-map.on("moveend") → searchCenter 更新  → スポット検索を実行（移動完了後のみ）
+center_changed → currentCenter 更新 → 住所取得をスロットル実行（500ms に 1 回）
+idle           → searchCenter 更新  → スポット検索を実行（移動完了後のみ）
 ```
 
 - 住所はドラッグ中も 500ms ごとに更新し、止まった後も末尾で必ず 1 回取得します。
-- スポット検索は `moveend` のみトリガーし、ドラッグ中の連続リクエストを防いでいます。
+- スポット検索は `idle` のみトリガーし、ドラッグ中の連続リクエストを防いでいます。
 
 ### 2. 逆ジオコーディングのスロットル + バックエンドキャッシュ
 
