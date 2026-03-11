@@ -89,7 +89,7 @@ docker-compose up
 
 | 技術 | 選定理由 |
 |------|---------|
-| PostgreSQL 16 + PostGIS 3.4 | `ST_DWithin` による半径検索と GiST インデックスで地理空間クエリを高速化できる |
+| PostgreSQL 16 + <br>PostGIS 3.4 | `ST_DWithin` による半径検索と GiST インデックスで地理空間クエリを高速化できる |
 | Docker Compose | 指定技術スタック |
 
 ---
