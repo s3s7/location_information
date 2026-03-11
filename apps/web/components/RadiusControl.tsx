@@ -5,23 +5,26 @@ type Props = {
   onChange: (value: number) => void;
 };
 
-const radiusOptions = [1, 3, 5, 10, 20];
-
 export default function RadiusControl({ value, onChange }: Props) {
   return (
     <div className="space-y-2">
-      <label className="block text-sm text-gray-500">検索半径</label>
-      <select
-        className="w-full rounded-lg border border-gray-300 bg-white p-2"
+      <div className="flex justify-between text-sm text-gray-500">
+        <label>検索半径</label>
+        <span>{value} km</span>
+      </div>
+      <input
+        type="range"
+        min={1}
+        max={100}
+        step={0.5}
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-      >
-        {radiusOptions.map((radius) => (
-          <option key={radius} value={radius}>
-            {radius} km
-          </option>
-        ))}
-      </select>
+        className="w-full"
+      />
+      <div className="flex justify-between text-xs text-gray-400">
+        <span>0.5 km</span>
+        <span>100 km</span>
+      </div>
     </div>
   );
 }

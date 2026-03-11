@@ -40,6 +40,7 @@ export default function HomePage() {
   const currentCenterRef = useRef<Center>(currentCenter);
   currentCenterRef.current = currentCenter;
   const lastSearchCenterRef = useRef<Center | null>(null);
+  const lastRadiusKmRef = useRef<number | null>(null);
 
   useEffect(() => {
     const THROTTLE_MS = 500;
@@ -81,9 +82,10 @@ export default function HomePage() {
   }, [apiBaseUrl, currentCenter.lat, currentCenter.lng]);
 
   useEffect(() => {
+    const radiusChanged = lastRadiusKmRef.current !== radiusKm;
     const SKIP_THRESHOLD_KM = 0.2;
     const prev = lastSearchCenterRef.current;
-    if (prev) {
+    if (!radiusChanged && prev) {
       const dLat = ((searchCenter.lat - prev.lat) * Math.PI) / 180;
       const dLng = ((searchCenter.lng - prev.lng) * Math.PI) / 180;
       const a =
@@ -95,6 +97,7 @@ export default function HomePage() {
       if (distKm < SKIP_THRESHOLD_KM) return;
     }
     lastSearchCenterRef.current = searchCenter;
+    lastRadiusKmRef.current = radiusKm;
 
     const fetchSpots = async () => {
       setLoadingSpots(true);
