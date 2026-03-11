@@ -32,6 +32,9 @@ export default function SpotList({ items, loading }: Props) {
           className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm"
         >
           <div className="font-semibold">{spot.name}</div>
+          {spot.category && (
+            <div className="mt-1 text-xs text-blue-500">{spot.category}</div>
+          )}
           <div className="mt-1 text-sm text-gray-500">
             {spot.address || "住所なし"}
           </div>

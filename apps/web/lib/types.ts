@@ -8,6 +8,7 @@ export type Spot = {
   externalId?: string | null;
   name: string;
   address: string | null;
+  category: string | null;
   latitude: number;
   longitude: number;
   distanceMeters: number;
