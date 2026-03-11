@@ -83,6 +83,7 @@ docker-compose up
 | TypeORM | 0.3.28 | 指定技術スタック。公式ドキュメントはわかりやすく、ボリュームもそこまでないので学習コストは低め.リレーショナルDBサポート。Entityから差分を自動検知するDB migrationの仕組み。SQLのQueryBuilderやTransactionの仕組みも提供。|
 | csv-parse | 6.1.0 | シードデータの CSV パースに使用。sync API でシンプルに実装できる |
 | Google Maps Geocoding API | - | 逆ジオコーディング（座標 → 住所変換）に使用。日本語住所の精度が高く、`language=ja` パラメータで日本語表記の住所を取得できる。APIキー未設定時は「緯度 X, 経度 Y」のフォールバック表示に切り替わるため、キーなしでも動作確認が可能 |
+| TypeScript | 5.9.3 | 指定技術スタック。 |
 
 ### Infrastructure
 
