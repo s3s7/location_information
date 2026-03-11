@@ -13,6 +13,7 @@ export class SpotsService {
         external_id AS "externalId",
         name,
         address,
+        raw->>'category' AS category,
         latitude,
         longitude,
         ST_Distance(
